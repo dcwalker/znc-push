@@ -8,18 +8,21 @@ conditions.  ZNC Push current supports the following services:
 * [Boxcar][]
 * [Notifo][]
 * [Notify My Android][] (NMA)
+* [Pushover][]
 * [Prowl][]
+* [Supertoasty][]
 
 This project is still a Work In Progress, but should be functional enough and stable enough
 for everyday usage.  Users are more than welcome to submit feature requests or patches for
 discussion or inclusion.  Bug reports and feature requests can be submitted to
-[my bug tracker][mantis] by selecting the "ZNC Push" project from the top right, or
-sent via email.
+[the repository issues list][issues], or sent via email.
 
 For full functionality, this module requires ZNC version 0.090 or newer, but should compile
 and run with a reduced feature set on versions as old as 0.078, the current version used by
 Ubuntu.  However, development and testing is done exclusively against the latest source
 distribution, so feedback on older releases of ZNC is needed to continue supporting them.
+If you want to use ZNC versions before 1.0 (0.206 or older), you will need to check out the
+"legacy" branch in order to compile it correctly.
 
 ZNC Push was created by [John Reese](http://johnmreese.com) and designed to fill a
 personal need.  It may not fit your use cases, but any and all feedback would be greatly
@@ -160,7 +163,9 @@ Configuration
     *   "boxcar"
     *   "notifo"
     *   "nma"
+    *   "pushover"
     *   "prowl"
+    *   "supertoasty"
 
 *   `username = ""`
 
@@ -172,7 +177,14 @@ Configuration
 
     Authentication token for push notifications.
 
-    This option must be set when using Notifo, Notify My Android, or Prowl.
+    This option must be set when using Notifo, Notify My Android, Pushover, Prowl or Supertoasty.
+
+*   `target = ""`
+
+    Device or target name for push notifications.
+
+    When using Pushover, this option allows you to specify a single device name to send
+    notifications to; if blank or unset, notifications will be sent to all devices.
 
 
 ### Conditions
@@ -265,7 +277,7 @@ Configuration
     truncated and ellipsized at or before this length is reached.  A value of 0 (zero) will
     disable this option.
 
-*   `message_url = ""`
+*   `message_uri = ""`
 
     URI that will be sent with the notification to Notifo.  This could be a web address or a
     local scheme to access a mobile application.  Keyword expansion is performed on this
@@ -356,14 +368,6 @@ For example, to send notifications via SMS to a Google Voice enabled phone.
 3. Grab the unique **From** address IE: *19395550113.19395550113.Jk4k234hVB@txt.voice.google.com*
 4. Set `to_email` to that address and `from_email` to the address GVoice forwards the email to
 
-Roadmap
--------
-
-### Settings
-
-*   Customizable notification titles and message formats.
-
-
 License
 -------
 
@@ -374,9 +378,11 @@ This project is licensed under the MIT license.  See the `LICENSE` file for deta
 [Boxcar]: http://boxcar.io
 [Notifo]: http://notifo.com
 [Notify My Android]: http://www.notifymyandroid.com
+[Pushover]: http://pushover.net
 [Prowl]: http://www.prowlapp.com
+[Supertoasty]: http://www.supertoasty.com
 
-[mantis]: http://leetcode.net/mantis
+[issues]: http://github.com/jreese/znc-push/issues
 [ZNC]: http://en.znc.in "ZNC, an advanced IRC bouncer"
 [ISO 8601]: http://en.wikipedia.org/wiki/ISO_8601 "ISO 8601 Date Format"
 

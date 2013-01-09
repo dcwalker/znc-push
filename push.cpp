@@ -10,21 +10,15 @@
 
 #define REQUIRESSL
 
-#include "znc.h"
-#include "Chan.h"
-#include "User.h"
-#include "Modules.h"
+#include <znc/znc.h>
+#include <znc/Chan.h>
+#include <znc/User.h>
+#include <znc/IRCNetwork.h>
+#include <znc/Modules.h>
+#include <znc/FileUtils.h>
+#include <znc/Client.h>
 #include "time.h"
-#include "FileUtils.h"
-
-#if (!defined(VERSION_MAJOR) || !defined(VERSION_MINOR) || (VERSION_MAJOR == 0 && VERSION_MINOR < 72))
-#error This module needs ZNC 0.072 or newer.
-#endif
-
-// Handle versions of ZNC older than 0.090 by disabling the away_only condition
-#if VERSION_MAJOR == 0 && VERSION_MINOR >= 90
-#define PUSH_AWAY
-#endif
+#include <string.h>
 
 // Forward declaration
 class CPushMod;
@@ -108,13 +102,13 @@ class CPushMod : public CModule
 		CString app;
 
 		// Time last notification was sent for a given context
-		map <CString, unsigned int> last_notification_time;
+        std::map <CString, unsigned int> last_notification_time;
 
 		// Time of last message by user to a given context
-		map <CString, unsigned int> last_reply_time;
+        std::map <CString, unsigned int> last_reply_time;
 
 		// Time of last activity by user for a given context
-		map <CString, unsigned int> last_active_time;
+        std::map <CString, unsigned int> last_active_time;
 
 		// Time of last activity by user in any context
 		unsigned int idle_time;
@@ -140,6 +134,7 @@ class CPushMod : public CModule
 			defaults["service"] = "";
 			defaults["username"] = "";
 			defaults["secret"] = "";
+			defaults["target"] = "";
 
 			defaults["smtp_server"] = "127.0.0.1:25";
 			defaults["smtp_tls"] = "off";
@@ -315,6 +310,34 @@ class CPushMod : public CModule
 				params["description"] = short_message;
 				params["url"] = uri;
 			}
+			else if (service == "pushover")
+			{
+				if (options["secret"] == "")
+				{
+					PutModule("Error: secret (user key) not set");
+					return;
+				}
+
+				CString pushover_api_token = "h6RToHDU7gNnB3IMyUb94SuwKtBzOD";
+
+				service_host = "api.pushover.net";
+				service_url = "/1/messages.json";
+
+				params["token"] = pushover_api_token;
+				params["user"] = options["secret"];
+				params["title"] = title;
+				params["message"] = short_message;
+
+				if (uri != "")
+				{
+					params["url"] = uri;
+				}
+
+				if (options["target"] != "")
+				{
+					params["device"] = options["target"];
+				}
+			}
 			else if (service == "prowl")
 			{
 				if (options["secret"] == "")
@@ -332,6 +355,26 @@ class CPushMod : public CModule
 				params["description"] = short_message;
 				params["url"] = uri;
 			}
+			else if (service == "supertoasty")
+			{
+				if (options["secret"] == "")
+				{
+					PutModule("Error: secret (device id) not set");
+					return;
+				}
+
+				use_post = false;
+				use_port = 80;
+				use_ssl = false;
+
+				service_host = "api.supertoasty.com";
+				service_url = "/notify/"+options["secret"];
+
+				params["title"] = title;
+				params["text"] = short_message;
+				params["image"] = "https://github.com/jreese/znc-push/raw/supertoasty/logo.png";
+				params["sender"] = "ZNC Push";
+      }
 			else if (service == "email")
 			{
 				if (options["from_email"] == "" || options["to_email"] == "")
@@ -499,12 +542,8 @@ class CPushMod : public CModule
 		 */
 		bool away_only()
 		{
-#ifdef PUSH_AWAY
 			CString value = options["away_only"].AsLower();
-			return value != "yes" || user->IsIRCAway();
-#else
-			return true
-#endif
+			return value != "yes" || GetNetwork()->IsIRCAway();
 		}
 
 		/**
@@ -514,7 +553,7 @@ class CPushMod : public CModule
 		 */
 		unsigned int client_count()
 		{
-			return user->GetClients().size();
+			return GetNetwork()->GetClients().size();
 		}
 
 		/**
@@ -565,9 +604,9 @@ class CPushMod : public CModule
 				}
 			}
 
-			CNick nick = user->GetIRCNick();
+			CNick nick = user->GetNick();
 
-			if (message.find(nick.GetNick()) != string::npos)
+			if (message.find(nick.GetNick()) != std::string::npos)
 			{
 				return true;
 			}
@@ -953,10 +992,18 @@ class CPushMod : public CModule
 						{
 							PutModule("Note: NMA requires setting the 'secret' option");
 						}
+						else if (value == "pushover")
+						{
+							PutModule("Note: Pushover requires setting the 'secret' option");
+						}
 						else if (value == "prowl")
 						{
 							PutModule("Note: Prowl requires setting the 'secret' option");
 						}
+						else if (value == "supertoasty")
+						{
+							PutModule("Note: Supertoasty requires setting the 'secret' option with device id");
+            }
 						else if (value == "email")
 						{
 							PutModule("Not: Email requests settings the 'from_email' and 'to_email' options");
@@ -970,6 +1017,8 @@ class CPushMod : public CModule
 
 					options[option] = value;
 					SetNV(option, options[option]);
+
+					PutModule("Ok");
 				}
 			}
 			// APPEND command
@@ -998,6 +1047,8 @@ class CPushMod : public CModule
 					options[option] += " " + value;
 					options[option].Trim();
 					SetNV(option, options[option]);
+
+					PutModule("Ok");
 				}
 			}
 			// PREPEND command
@@ -1026,6 +1077,8 @@ class CPushMod : public CModule
 					options[option] = value + " " + options[option];
 					options[option].Trim();
 					SetNV(option, options[option]);
+
+					PutModule("Ok");
 				}
 			}
 			// UNSET command
@@ -1048,6 +1101,8 @@ class CPushMod : public CModule
 				{
 					options[option] = defaults[option];
 					DelNV(option);
+
+					PutModule("Ok");
 				}
 			}
 			// GET command
@@ -1181,11 +1236,9 @@ class CPushMod : public CModule
 				table.AddColumn("Condition");
 				table.AddColumn("Status");
 
-#ifdef PUSH_AWAY
 				table.AddRow();
 				table.SetCell("Condition", "away");
-				table.SetCell("Status", user->IsIRCAway() ? "yes" : "no");
-#endif
+				table.SetCell("Status", GetNetwork()->IsIRCAway() ? "yes" : "no");
 
 				table.AddRow();
 				table.SetCell("Condition", "client_count");
@@ -1274,12 +1327,16 @@ class CPushMod : public CModule
 				sock->Connect(service_host, use_port, use_ssl);
 				sock->Request(use_post, service_host, service_url, params, service_auth);
 				AddSocket(sock);
+
+				PutModule("Ok");
 			}
 			// SEND command
 			else if (action == "send")
 			{
 				CString message = command.Token(1, true, " ", true);
 				send_message(message);
+
+				PutModule("Ok");
 			}
 			// HELP command
 			else if (action == "help")
